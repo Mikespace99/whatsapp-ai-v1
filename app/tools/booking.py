@@ -36,11 +36,13 @@ _conversation_manager = ConversationManager()
 
 MESSAGE_TEMPLATES = {
     "ask_full_name":
-        "Saluta l'utente e chiedigli gentilmente nome e cognome per procedere con la prenotazione.",
+        "Chiedi gentilmente all'utente di indicare NOME e COGNOME completi per procedere con la prenotazione.",
 
     "ask_slot_selection":
-        "Se e' presente un appuntamento esistente nel contesto, comunicalo all'utente (es. 'Il tuo appuntamento attuale e' per...'). "
-        "Mostra poi gli slot disponibili elencati nel contesto e chiedi quale preferisce numerando le opzioni (1, 2, 3...).",
+        "L'utente ha selezionato uno slot oppure gli sono stati mostrati degli slot. "
+        "Se l'utente ha appena scelto una data/ora, chiedi in modo DIRETTISSIMO e conciso se intende confermare l'appuntamento "
+        "(es. 'Confermi la prenotazione per Giovedì 13 Agosto alle ore 15:00?'). "
+        "NON ripetere 'attualmente ho disponibilità' e NON usare frasi ridondanti o preamboli.",
 
     "slots_available":
         "Se e' presente un appuntamento esistente nel contesto, comunicalo all'utente. "
