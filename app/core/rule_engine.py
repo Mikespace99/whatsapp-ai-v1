@@ -122,7 +122,15 @@ class ConditionEvaluator:
         if key == "customer_fields_complete":
             customer = conv_data.get("customer", {})
             required = value  # lista di campi obbligatori
-            return all(bool(customer.get(f)) for f in required)
+            for f in required:
+                val = customer.get(f)
+                if not val:
+                    return False
+                if f == "full_name":
+                    words = str(val).strip().split()
+                    if len(words) < 2:
+                        return False
+            return True
 
         # --- Request/service conditions ---
         if key == "has_service":
@@ -173,18 +181,33 @@ class ConditionEvaluator:
 BOOKING_RULES: list[dict] = [
 
     # ── START_BOOKING ─────────────────────────────────────────────────────────
+    # Se il nome completo (>= 2 parole) e' gia' presente → cerca subito disponibilità!
     {
-        "rule_id": "BOOKING_START_001",
+        "rule_id": "BOOKING_START_COMPLETE",
+        "workflow": "BOOKING",
+        "state": "START_BOOKING",
+        "priority": 20,
+        "conditions": {"customer_fields_complete": ["full_name"]},
+        "actions": [
+            {"type": "EXECUTE_ACTION", "action": "SEARCH_AVAILABLE_SLOTS"},
+            {"type": "CHANGE_STATE", "value": "WAITING_SLOT_SELECTION"},
+        ],
+    },
+    # Se il nome completo manca o ha una sola parola → chiedi nome e cognome
+    {
+        "rule_id": "BOOKING_START_MISSING_NAME",
         "workflow": "BOOKING",
         "state": "START_BOOKING",
         "priority": 10,
         "conditions": {},
         "actions": [
-            {"type": "CHANGE_STATE", "value": "COLLECT_CUSTOMER_DATA"}
+            {"type": "CHANGE_STATE", "value": "COLLECT_CUSTOMER_DATA"},
+            {"type": "REQUEST_INFORMATION", "field": "full_name", "message_key": "ask_full_name"},
         ],
     },
 
     # ── COLLECT_CUSTOMER_DATA ─────────────────────────────────────────────────
+    # Una volta fornito Nome + Cognome → passa a cercare disponibilità
     {
         "rule_id": "BOOKING_COLLECT_001",
         "workflow": "BOOKING",
@@ -192,7 +215,8 @@ BOOKING_RULES: list[dict] = [
         "priority": 20,
         "conditions": {"customer_fields_complete": ["full_name"]},
         "actions": [
-            {"type": "CHANGE_STATE", "value": "READY_FOR_AVAILABILITY_SEARCH"}
+            {"type": "EXECUTE_ACTION", "action": "SEARCH_AVAILABLE_SLOTS"},
+            {"type": "CHANGE_STATE", "value": "WAITING_SLOT_SELECTION"},
         ],
     },
     {
@@ -200,7 +224,7 @@ BOOKING_RULES: list[dict] = [
         "workflow": "BOOKING",
         "state": "COLLECT_CUSTOMER_DATA",
         "priority": 10,
-        "conditions": {"customer_field_missing": ["full_name"]},
+        "conditions": {},
         "actions": [
             {"type": "REQUEST_INFORMATION", "field": "full_name", "message_key": "ask_full_name"}
         ],
