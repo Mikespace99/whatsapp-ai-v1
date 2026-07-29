@@ -132,6 +132,9 @@ class ConditionEvaluator:
                         return False
             return True
 
+        if key == "phone_confirmed":
+            return bool(conv_data.get("customer", {}).get("phone_confirmed"))
+
         # --- Request/service conditions ---
         if key == "has_service":
             return bool(conv_data.get("request", {}).get("service"))
@@ -147,11 +150,35 @@ class ConditionEvaluator:
 
         if key == "slot_selection_valid":
             slots = conv_data.get("availability", {}).get("slots", [])
+            if not slots:
+                return False
+
+            # Match per indice (es. 1, 2, 3)
             idx = pr.selection.index
             if idx is not None and 1 <= idx <= len(slots):
                 return True
+
+            # Match per valore testuale
             if pr.selection.value:
-                return any(s.get("time") == pr.selection.value for s in slots)
+                if any(s.get("time") == pr.selection.value for s in slots):
+                    return True
+
+            # Match per date/time risolti dal temporal_parser (es. "venerdì alle 11")
+            target_date = pr.datetime_info.resolved_date
+            target_time = pr.datetime_info.resolved_time
+
+            if target_date and target_time:
+                if any(s.get("date") == target_date and s.get("time") == target_time for s in slots):
+                    return True
+
+            if target_time:
+                if any(s.get("time") == target_time for s in slots):
+                    return True
+
+            if target_date:
+                if any(s.get("date") == target_date for s in slots):
+                    return True
+
             return False
 
         # --- Appointment conditions ---
@@ -207,20 +234,38 @@ BOOKING_RULES: list[dict] = [
     },
 
     # ── COLLECT_CUSTOMER_DATA ─────────────────────────────────────────────────
-    # Una volta fornito Nome + Cognome → passa a cercare disponibilità
+    # Se sia Nome + Cognome che la conferma del telefono sono completi → cerca disponibilità!
     {
-        "rule_id": "BOOKING_COLLECT_001",
+        "rule_id": "BOOKING_COLLECT_COMPLETE",
         "workflow": "BOOKING",
         "state": "COLLECT_CUSTOMER_DATA",
-        "priority": 20,
-        "conditions": {"customer_fields_complete": ["full_name"]},
+        "priority": 30,
+        "conditions": {
+            "customer_fields_complete": ["full_name"],
+            "phone_confirmed": True,
+        },
         "actions": [
             {"type": "EXECUTE_ACTION", "action": "SEARCH_AVAILABLE_SLOTS"},
             {"type": "CHANGE_STATE", "value": "WAITING_SLOT_SELECTION"},
         ],
     },
+    # Se Nome + Cognome e' presente ma il telefono non e' ancora confermato → chiedi conferma telefono
     {
-        "rule_id": "BOOKING_COLLECT_002",
+        "rule_id": "BOOKING_COLLECT_ASK_PHONE",
+        "workflow": "BOOKING",
+        "state": "COLLECT_CUSTOMER_DATA",
+        "priority": 20,
+        "conditions": {
+            "customer_fields_complete": ["full_name"],
+            "not": {"phone_confirmed": True},
+        },
+        "actions": [
+            {"type": "REQUEST_INFORMATION", "field": "phone", "message_key": "ask_phone_confirmation"}
+        ],
+    },
+    # Se manca Nome + Cognome → chiedi nome e cognome
+    {
+        "rule_id": "BOOKING_COLLECT_ASK_NAME",
         "workflow": "BOOKING",
         "state": "COLLECT_CUSTOMER_DATA",
         "priority": 10,
