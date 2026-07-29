@@ -337,12 +337,12 @@ class ConversationManager:
         """Aggiunge le nuove entita' estratte al conv_data."""
         customer = conv_data.setdefault("customer", {})
 
+        # NOTA: Usiamo SOLO il full_name estratto dal testo utente dal Parser Engine,
+        # MAI il nome del profilo WhatsApp (customer_name) per l'anagrafica ufficiale!
         if pr.entities.full_name and not customer.get("full_name"):
             customer["full_name"] = pr.entities.full_name
         if pr.entities.phone and not customer.get("phone"):
             customer["phone"] = pr.entities.phone
-        if customer_name and not customer.get("full_name"):
-            customer["full_name"] = customer_name
         if phone_number and not customer.get("phone"):
             customer["phone"] = phone_number
 
