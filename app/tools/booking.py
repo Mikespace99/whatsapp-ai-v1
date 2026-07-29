@@ -36,7 +36,11 @@ _conversation_manager = ConversationManager()
 
 MESSAGE_TEMPLATES = {
     "ask_full_name":
-        "Chiedi gentilmente all'utente di indicare NOME e COGNOME completi per procedere con la prenotazione.",
+        "Chiedi gentilmente NOME e COGNOME della persona a cui intitolare l'appuntamento (nome e cognome completi).",
+
+    "ask_phone_confirmation":
+        "Informa l'utente che stai usando il numero da cui scrive per le comunicazioni dell'appuntamento (mostra il numero dal contesto) "
+        "e chiedi se va bene o se desidera fornirne un altro.",
 
     "ask_slot_selection":
         "L'utente ha selezionato uno slot oppure gli sono stati mostrati degli slot. "
@@ -248,7 +252,9 @@ def _generate_response(
 
     customer = conv_data.get("customer", {})
     if customer.get("full_name"):
-        context_parts.append(f"Nome cliente: {customer['full_name']}")
+        context_parts.append(f"Nome della persona dell'appuntamento: {customer['full_name']}")
+    if customer.get("phone"):
+        context_parts.append(f"Numero di telefono di contatto attuale: {customer['phone']}")
 
     # Appuntamento esistente attivo (per reschedule / cancel / check)
     existing = conv_data.get("existing_appointment")
