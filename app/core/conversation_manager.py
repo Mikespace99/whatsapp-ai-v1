@@ -227,20 +227,51 @@ class ConversationManager:
         return {}
 
     def _get_selected_slot(self, slots: list, pr: ParsingResult) -> Optional[dict]:
-        """Risolve la selezione dell'utente a uno slot concreto."""
+        """
+        Risolve la selezione dell'utente a uno slot concreto.
+        Supporta matching per:
+          1. Indice (es. 1, 2, 3, "il secondo")
+          2. Valore testuale
+          3. Date e ora risolte dal temporal_parser (es. "venerdì alle 11" -> date+time match)
+        """
         if not slots:
             return None
 
+        # 1. Matching per indice (es. "il secondo" -> index=2 -> slots[1])
         if pr.selection.index is not None:
             idx = pr.selection.index - 1
             if 0 <= idx < len(slots):
                 return slots[idx]
 
+        # 2. Matching per valore testuale esatto in selection.value
         if pr.selection.value:
             for slot in slots:
                 if slot.get("time") == pr.selection.value:
                     return slot
 
+        # 3. Matching tramite date/time risolti dal temporal_parser
+        target_date = pr.datetime_info.resolved_date
+        target_time = pr.datetime_info.resolved_time
+
+        # Match sia data che ora
+        if target_date and target_time:
+            for slot in slots:
+                if slot.get("date") == target_date and slot.get("time") == target_time:
+                    return slot
+
+        # Match solo ora (es. "quello delle 11" -> time="11:00")
+        if target_time:
+            for slot in slots:
+                if slot.get("time") == target_time:
+                    return slot
+
+        # Match solo data (es. "venerdì")
+        if target_date:
+            for slot in slots:
+                if slot.get("date") == target_date:
+                    return slot
+
+        # Fallback: se c'e' un unico slot in lista
         if len(slots) == 1:
             return slots[0]
 
@@ -337,14 +368,24 @@ class ConversationManager:
         """Aggiunge le nuove entita' estratte al conv_data."""
         customer = conv_data.setdefault("customer", {})
 
-        # NOTA: Usiamo SOLO il full_name estratto dal testo utente dal Parser Engine,
-        # MAI il nome del profilo WhatsApp (customer_name) per l'anagrafica ufficiale!
-        if pr.entities.full_name and not customer.get("full_name"):
-            customer["full_name"] = pr.entities.full_name
-        if pr.entities.phone and not customer.get("phone"):
-            customer["phone"] = pr.entities.phone
+        # 1. full_name: SOLO se estratto dal messaggio utente ed ha almeno 2 parole
+        if pr.entities.full_name:
+            words = pr.entities.full_name.strip().split()
+            if len(words) >= 2:
+                customer["full_name"] = pr.entities.full_name
+
+        # 2. phone: imposta di default il numero WhatsApp da cui scrive
         if phone_number and not customer.get("phone"):
             customer["phone"] = phone_number
+
+        # Se l'utente scrive esplicitamente un numero di telefono nel testo → usa quello e conferma
+        if pr.entities.phone:
+            customer["phone"] = pr.entities.phone
+            customer["phone_confirmed"] = True
+
+        # Se il cliente risponde "sì" / "va bene" / "ok" alla richiesta di conferma telefono → marca confermato
+        if pr.confirmation.value == "YES" and not customer.get("phone_confirmed"):
+            customer["phone_confirmed"] = True
 
         request = conv_data.setdefault("request", {})
         if pr.entities.service:
